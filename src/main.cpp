@@ -1,4 +1,6 @@
 #include <cstring>
+#include <exception>
+#include <stdexcept>
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <string>
@@ -71,12 +73,20 @@ class Memory {
     }
 
     template<typename T>
-    unsigned int read(uintptr_t addy, size_t size) {
-        iovec rvec;
-        rvec.iov_base = reinterpret_cast<void*>(addy);
-        rvec.iov_len = size;
+    T read(uintptr_t addy) {
+        T result = NULL;
 
-        ssize_t vread = process_vm_readv(client.get_id(), const struct iovec *lvec, unsigned long liovcnt, rvec, unsigned long riovcnt, 0);
+        iovec local;
+        local.iov_base = &result;
+        local.iov_len = sizeof(T);
+
+        iovec remote;
+        remote.iov_base = reinterpret_cast<void*>(addy);
+        remote.iov_len = sizeof(T);
+
+
+        ssize_t vread = process_vm_readv(client.get_id(), &local, 1, &remote, 1, 0);
+        return result;
     }
 
 };
