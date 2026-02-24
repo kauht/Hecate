@@ -89,4 +89,19 @@ class Memory {
         return result;
     }
 
+    template<typename T>
+    bool write(uintptr_t addy, T data) {
+        iovec local;
+        local.iov_base = &data;
+        local.iov_len = sizeof(T);
+
+        iovec remote;
+        remote.iov_base = reinterpret_cast<void*>(addy);
+        remote.iov_len = sizeof(T);
+
+
+        ssize_t vread = process_vm_writev(client.get_id(), &local, 1, &remote, 1, 0);
+        return vread == sizeof(T);
+    }
+
 };
