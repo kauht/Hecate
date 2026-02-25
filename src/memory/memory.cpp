@@ -63,7 +63,7 @@ class Memory {
 
         dirent* entry;
         while ((entry = readdir(proc)) != nullptr) {
-            if (entry->d_type == DT_DIR && std::isdigit(static_cast<unsigned char>(entry->d_name[0]))) {
+            if (entry->d_type == DT_DIR && std::isdigit(entry->d_name[0])) {
                 pid_t pid = std::stoi(entry->d_name);
 
                 std::string path = "/proc/" + std::string(entry->d_name) + "/comm";
@@ -95,26 +95,21 @@ class Memory {
     Memory(const std::string& name, const std::string& module_name = std::string()) {
         client = Client(name);
 #ifdef _WIN32
-        // On Windows, lookup by process name
-        DWORD pid = get_pid(name);
-        client.set_id(static_cast<Client::id_t>(pid));
-        if (pid != 0) {
-            // Open a process handle for future operations (keep it in Client)
-            HANDLE hProc = OpenProcess(PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION | PROCESS_QUERY_INFORMATION, FALSE, pid);
+        get_pid();
+        if (client.get_id()) {
+            HANDLE hProc = OpenProcess(PROCESS_ALL_ACCESS, 0, pid);
             if (hProc) {
                 client.set_handle(hProc);
             }
 
-            // Resolve module (or main exe) base address and store it
             uintptr_t base = get_base(pid, module_name);
             client.set_base_address(base);
-            if (!module_name.empty() && base != static_cast<uintptr_t>(0)) {
+            if (!module_name.empty() && base) {
                 client.set_module_name(module_name);
             }
         }
 #else
-        // POSIX path: get_pid() finds the pid by name
-        client.set_id(get_pid());
+        client.set_id(client.get_id());
 #endif
     }
     ~Memory() {
@@ -153,7 +148,7 @@ class Memory {
 
 
         ssize_t vwrite = process_vm_writev(client.get_id(), &local, 1, &remote, 1, 0);
-        return vwrite == static_cast<ssize_t>(sizeof(T));
+        return vwrite == sizeof(T);
     }
 
 };
