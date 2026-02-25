@@ -4,7 +4,9 @@
 #include <sys/types.h>
 #include <string>
 #include <fstream>
-#include <stdint.h>
+#include <cctype>
+#include <cstdint>
+#include <unistd.h>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -17,20 +19,21 @@
 struct Client {
 public:
 #ifdef _WIN32
-    using id_type = DWORD;
+    using id_t = DWORD;
 #else
-    using id_type = pid_t;
+    using id_t = pid_t;
 #endif
+
     Client()
         : name_()
-        , id_(static_cast<id_type>(0))
+        , id_(static_cast<id_t>(0))
 #ifdef _WIN32
         , handle_(NULL)
         , module_name_()
 #endif
     {}
 
-    explicit Client(const std::string& name, id_type id)
+    Client(const std::string& name, id_t id = static_cast<id_t>(0))
         : name_(name)
         , id_(id)
 #ifdef _WIN32
@@ -40,7 +43,7 @@ public:
     {}
 
 #ifdef _WIN32
-    Client(const std::string& name, id_type id, HANDLE handle, const std::string& module_name)
+    Client(const std::string& name, id_t id, HANDLE handle, const std::string& module_name)
         : name_(name)
         , id_(id)
         , handle_(handle)
@@ -48,25 +51,25 @@ public:
     {}
 #endif
 
-    const std::string& get_name() const { return name_; }
-    id_type get_id() const { return id_; }
+    auto get_name() const -> const std::string& { return name_; }
+    auto get_id() const -> id_t { return id_; }
 
 #ifdef _WIN32
-    HANDLE get_handle() const { return handle_; }
-    const std::string& get_module_name() const { return module_name_; }
+    auto get_handle() const -> HANDLE { return handle_; }
+    auto get_module_name() const -> const std::string& { return module_name_; }
 #endif
 
-    void set_name(const std::string& name) { name_ = name; }
-    void set_id(id_type id) { id_ = id; }
+    auto set_name(const std::string& name) -> void { name_ = name; }
+    auto set_id(id_t id) -> void { id_ = id; }
 
 #ifdef _WIN32
-    void set_handle(HANDLE h) { handle_ = h; }
-    void set_module_name(const std::string& m) { module_name_ = m; }
+    auto set_handle(HANDLE h) -> void { handle_ = h; }
+    auto set_module_name(const std::string& m) -> void { module_name_ = m; }
 #endif
 
 private:
     std::string name_;
-    id_type id_;
+    id_t id_;
 
 #ifdef _WIN32
     HANDLE handle_;
