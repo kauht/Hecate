@@ -27,6 +27,7 @@ public:
     Client()
         : name_()
         , id_(static_cast<id_t>(0))
+        , base_(static_cast<uintptr_t>(0))
 #ifdef _WIN32
         , handle_(NULL)
         , module_name_()
@@ -36,6 +37,7 @@ public:
     Client(const std::string& name, id_t id = static_cast<id_t>(0))
         : name_(name)
         , id_(id)
+        , base_(static_cast<uintptr_t>(0))
 #ifdef _WIN32
         , handle_(NULL)
         , module_name_()
@@ -48,11 +50,13 @@ public:
         , id_(id)
         , handle_(handle)
         , module_name_(module_name)
+        , base_(static_cast<uintptr_t>(0))
     {}
 #endif
 
     auto get_name() const -> const std::string& { return name_; }
     auto get_id() const -> id_t { return id_; }
+    auto get_base() const -> uintptr_t { return base_; }
 
 #ifdef _WIN32
     auto get_handle() const -> HANDLE { return handle_; }
@@ -61,6 +65,7 @@ public:
 
     auto set_name(const std::string& name) -> void { name_ = name; }
     auto set_id(id_t id) -> void { id_ = id; }
+    auto set_base(uintptr_t addr) -> void { base_ = addr; }
 
 #ifdef _WIN32
     auto set_handle(HANDLE h) -> void { handle_ = h; }
@@ -70,6 +75,7 @@ public:
 private:
     std::string name_;
     id_t id_;
+    uintptr_t base_;
 
 #ifdef _WIN32
     HANDLE handle_;
