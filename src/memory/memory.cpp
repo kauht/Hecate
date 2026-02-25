@@ -35,10 +35,13 @@ class Memory {
     #else
     auto get_pid() -> pid_t {
         DIR* proc = opendir("/proc");
+        if (!proc) {
+            return 0;
+        }
 
         dirent* entry;
         while ((entry = readdir(proc)) != nullptr) {
-            if (entry->d_type == DT_DIR && std::isdigit(entry->d_name[0])) {
+            if (entry->d_type == DT_DIR && std::isdigit(static_cast<unsigned char>(entry->d_name[0]))) {
                 pid_t pid = std::stoi(entry->d_name);
 
                 std::string path = "/proc/" + std::string(entry->d_name) + "/comm";
@@ -50,6 +53,7 @@ class Memory {
 
                 // std::cout << "PID: " << pid << ", Name: " << name << std::endl;
                 if (name == client.get_name()) {
+                    closedir(proc);
                     return pid;
                 }
             }
@@ -67,18 +71,19 @@ class Memory {
 
     public:
     Memory(std::string name) {
-        client = 
+        client = Client(name);
+        client.set_id(get_pid());
     }
     ~Memory() {
 
     }
-    const Client get_client() const {
+    auto get_client() const -> const Client& {
         return client;
     }
 
     template<typename T>
     T read(uintptr_t addy) {
-        T result = NULL;
+        T result{};
 
         iovec local;
         local.iov_base = &result;
@@ -104,8 +109,8 @@ class Memory {
         remote.iov_len = sizeof(T);
 
 
-        ssize_t vread = process_vm_writev(client.get_id(), &local, 1, &remote, 1, 0);
-        return vread == sizeof(T);
+        ssize_t vwrite = process_vm_writev(client.get_id(), &local, 1, &remote, 1, 0);
+        return vwrite == static_cast<ssize_t>(sizeof(T));
     }
 
 };
