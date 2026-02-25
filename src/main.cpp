@@ -1,22 +1,30 @@
 #include <cstring>
-#include <exception>
-#include <stdexcept>
 #include <sys/types.h>
-#include <sys/uio.h>
 #include <string>
-#include <dirent.h>
-#include <cctype>
-#include <iostream>
-#include <print>
-#include <format>
-#include <vector>
-#include <cctype>
 #include <fstream>
 #include <stdint.h>
+#ifdef _WIN32
+#include <Windows.h>
+#include <TlHelp32.h>
+#else
+#include <dirent.h>
+#include <sys/uio.h>
+#endif
 
 struct Client {
-public:
-    Client(const std::string& name, int id) : name_(name), id_(id) {}
+    public:
+    #ifdef _WIN32
+    Client(const std::string& name, int id, HANDLE handle, const std::string& module_name) : name_(name), id_(id), handle_(handle), module_name_(module_name) {}
+    const HANDLE get_handle() const {
+        return handle_;
+    }
+    const std::string& get_module_name() const {
+        return module_name_;
+    }
+    #else
+    Client(const std::string& name, int id, HANDLE handle) : name_(name), id_(id) {}
+    #endif
+
     const std::string& get_name() const {
         return name_;
     }
@@ -26,9 +34,39 @@ public:
 private:
     std::string name_;
     int id_;
+
+    #ifdef _WIN32
+    HANDLE handle_;
+    std::string module_name_;
+    #endif
 };
 
-auto get_pid(const std::string& n) -> pid_t {
+#ifdef _WIN32
+
+
+auto get_pid(const std::string& process_name) -> DWORD {
+
+}
+
+auto get_handle(DWORD pid, const std::string& module_name = std::string()) -> HANDLE {
+    HANDLE hsnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
+    LPMODULEENTRY32 lpme{};
+    lpme->dwSize = sizeof(LPMODULEENTRY32);
+
+    if (Module32First(hsnap, lpme)) {
+        if (module_name == std::string()) {
+            return lpme->modBaseAddr;
+        }
+        do {
+            if (std::string(lpme->szModule) == module_name) {
+                return lpme->modBaseAddr;
+            }
+        } while(Module32Next(hsnap, lpme));
+    }
+    return NULL;
+}
+#else
+auto get_pid(const std::string& process_name) -> pid_t {
     DIR* proc = opendir("/proc");
 
     dirent* entry;
@@ -44,7 +82,7 @@ auto get_pid(const std::string& n) -> pid_t {
             }
 
             // std::cout << "PID: " << pid << ", Name: " << name << std::endl;
-            if (name == n) {
+            if (name == process_name) {
                 return pid;
             }
         }
@@ -52,6 +90,7 @@ auto get_pid(const std::string& n) -> pid_t {
     closedir(proc);
     return 0;
 }
+#endif
 
 auto main() -> int {
     pid_t pid = get_pid("electron");
