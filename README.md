@@ -16,7 +16,7 @@
     <b><a href="#overview">Overview</a></b> •
     <b><a href="#community">Community</a></b> •
     <b><a href="#quick-start">Quick Start</a></b> •
-    <b><a href="#language-reference">Language Reference</a></b> •
+    <b><a href="#documentation">Documentation</a></b> •
     <b><a href="#examples">Examples</a></b> •
     <b><a href="#roadmap">Roadmap</a></b>
   </p>
