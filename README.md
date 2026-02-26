@@ -6,7 +6,7 @@
     <a href="#"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
     <a href="#"><img src="https://img.shields.io/badge/platform-x64-lightgrey" alt="Platform"></a>
   </p>
-  <p><em>At the crossroads of worlds.</em></p>
+  <p><em>Take Control.</em></p>
 </div>
 
 <hr>
