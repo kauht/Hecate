@@ -1,1 +1,1 @@
-# Linux-RPM-Class
+# A cross-platform process manipulation library
