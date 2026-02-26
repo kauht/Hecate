@@ -1,154 +1,125 @@
 #include "memory.h"
 
-
-
-class Memory {
-    private:
-    Client client;
-    #ifdef _WIN32
-    auto get_pid() -> void {
-        HANDLE hsnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-
-
-        PROCESSENTRY32 pe;
-        pe.dwSize = sizeof(PROCESSENTRY32);
-
-        if (Process32First(hsnap, &pe)) {
-            do {
-                if (_stricmp(client.name_.c_str(), pe.szExeFile) == 0) {
-                    client.set_id(pe.th32ProcessID);
-                }
-            } while (Process32Next(hsnap, &pe));
-        }
-
-        CloseHandle(hsnap);
-        return;
-    }
-
-    auto get_base(DWORD pid, const std::string& module_name = std::string()) -> void {
-        if (!pid) {
-            return;
-        }
-
-        HANDLE hsnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
-
-        MODULEENTRY32 me{};
-        me.dwSize = sizeof(MODULEENTRY32);
-
-        uintptr_t found_base = 0;
-
-        if (Module32First(hsnap, &me)) {
-            if (module_name.empty()) {
-                client.set_base(me.modBaseAddr);
-            }
-
-            do {
-                if (_stricmp(module_name.c_str(), me.szModule) == 0) {
-                    client.set_base(me.modBaseAddr);
-                }
-            } while (Module32Next(hsnap, &me));
-        }
-
-        CloseHandle(hsnap);
-
-        return;
-    }
-    #else
-    auto get_pid() -> void {
-        DIR* proc = opendir("/proc");
-        if (!proc) {
-            client.set_id(0);
-            return;
-        }
-
-        dirent* entry;
-        while ((entry = readdir(proc)) != nullptr) {
-            if (entry->d_type == DT_DIR && std::isdigit(entry->d_name[0])) {
-                pid_t pid = std::stoi(entry->d_name);
-
-                std::string path = "/proc/" + std::string(entry->d_name) + "/comm";
-                std::ifstream comm_file(path);
-                std::string name;
-                if (comm_file) {
-                    std::getline(comm_file, name);
-                }
-
-                // std::cout << "PID: " << pid << ", Name: " << name << std::endl;
-                if (name == client.get_name()) {
-                    closedir(proc);
-                    client.set_id(pid);
-                }
-            }
-        }
-        closedir(proc);
-        client.set_id(0);
-    }
-    #endif
-
-
-
-
-
-
-
-    public:
-    Memory(const std::string& name, const std::string& module_name = std::string()) {
-        client = Client(name);
 #ifdef _WIN32
-        get_pid();
-        if (client.get_id()) {
-            HANDLE hProc = OpenProcess(PROCESS_ALL_ACCESS, 0, pid);
-            if (hProc) {
-                client.set_handle(hProc);
-            }
-
-            uintptr_t base = get_base(pid, module_name);
-            client.set_base_address(base);
-            if (!module_name.empty() && base) {
-                client.set_module_name(module_name);
-            }
-        }
+#include <TlHelp32.h>
+#include <algorithm>
 #else
-        client.set_id(client.get_id());
+#include <cerrno>
+#include <cstdlib>
+#include <dirent.h>
+#include <fstream>
+#include <sys/uio.h>
 #endif
+
+Memory::Memory(const std::string& name, const std::string& module_name) {
+    client.set_name(name);
+    get_pid();
+
+#ifdef _WIN32
+    auto pid = client.get_id();
+    if (pid != 0) {
+        HANDLE hProc = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
+        if (hProc) {
+            client.set_handle(hProc);
+        }
+
+        get_base(client.get_id(), module_name);
+
+        if (!module_name.empty() && client.get_base()) {
+            client.set_module_name(module_name);
+        }
     }
-    ~Memory() {
+#endif
+}
 
+Memory::~Memory() {
+#ifdef _WIN32
+    if (client.get_handle()) {
+        CloseHandle(client.get_handle());
     }
-    auto get_client() const -> const Client& {
-        return client;
-    }
+#endif
+}
 
-    template<typename T>
-    T read(uintptr_t addy) {
-        T result{};
+auto Memory::get_client() const -> const Client& { return client; }
 
-        iovec local;
-        local.iov_base = &result;
-        local.iov_len = sizeof(T);
+void Memory::get_pid() {
+#ifdef _WIN32
+    HANDLE hsnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
-        iovec remote;
-        remote.iov_base = reinterpret_cast<void*>(addy);
-        remote.iov_len = sizeof(T);
+    PROCESSENTRY32 pe;
+    pe.dwSize = sizeof(PROCESSENTRY32);
 
-
-        ssize_t vread = process_vm_readv(client.get_id(), &local, 1, &remote, 1, 0);
-        return result;
-    }
-
-    template<typename T>
-    bool write(uintptr_t addy, T data) {
-        iovec local;
-        local.iov_base = &data;
-        local.iov_len = sizeof(T);
-
-        iovec remote;
-        remote.iov_base = reinterpret_cast<void*>(addy);
-        remote.iov_len = sizeof(T);
-
-
-        ssize_t vwrite = process_vm_writev(client.get_id(), &local, 1, &remote, 1, 0);
-        return vwrite == sizeof(T);
+    if (Process32First(hsnap, &pe)) {
+        do {
+            if (_stricmp(client.get_name().c_str(), pe.szExeFile) == 0) {
+                client.set_id(pe.th32ProcessID);
+                break;
+            }
+        } while (Process32Next(hsnap, &pe));
     }
 
-};
+    CloseHandle(hsnap);
+#else
+    DIR* proc = opendir("/proc");
+    if (!proc) {
+        client.set_id(0);
+        return;
+    }
+
+    struct dirent* entry;
+    while ((entry = readdir(proc)) != nullptr) {
+        const char* name = entry->d_name;
+        if (!std::isdigit(name[0]))
+            continue;
+
+        pid_t pid = 0;
+
+        std::string comm_path = std::string("/proc/") + name + "/comm";
+        std::ifstream comm_file(comm_path);
+        if (!comm_file.is_open())
+            continue;
+
+        std::string proc_name;
+        std::getline(comm_file, proc_name);
+        comm_file.close();
+
+        if (proc_name == client.get_name()) {
+            client.set_id(pid);
+            closedir(proc);
+            return;
+        }
+    }
+
+    closedir(proc);
+    client.set_id(0);
+#endif
+}
+
+#ifdef _WIN32
+void Memory::get_base(DWORD pid, const std::string& module_name) {
+    if (!pid) {
+        client.set_base(0);
+        return;
+    }
+
+    HANDLE hsnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
+
+    MODULEENTRY32 me;
+    me.dwSize = sizeof(MODULEENTRY32);
+
+    if (Module32First(hsnap, &me)) {
+        if (module_name.empty()) {
+            client.set_base(me.modBaseAddr);
+        }
+
+        do {
+            if (!module_name.empty() && _stricmp(module_name.c_str(), me.szModule) == 0) {
+                client.set_base(me.modBaseAddr);
+                break;
+            }
+        } while (Module32Next(hsnap, &me));
+    }
+
+    CloseHandle(hsnap);
+}
+#endif
